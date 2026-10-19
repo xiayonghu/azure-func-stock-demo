@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Row = Record<string, string | number | null>;
 type StockResponse = { symbol: string; count: number; history: Row[]; error?: string };
@@ -16,13 +16,28 @@ function formatCell(value: Row[string]) {
   return /^\d{4}-\d{2}-\d{2}T00:00:00/.test(value) ? value.slice(0, 10) : value;
 }
 
-export default function StockViewer({ symbols }: { symbols: string[] }) {
+export default function StockViewer() {
+  const [symbols, setSymbols] = useState<string[] | null>(null);
+  const [symbolsError, setSymbolsError] = useState("");
   const [symbol, setSymbol] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [data, setData] = useState<StockResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/symbols")
+      .then(async (res) => {
+        const body: { symbols?: string[]; error?: string } = await res.json();
+        if (!res.ok || !body.symbols) throw new Error(body.error || `Request failed (${res.status}).`);
+        setSymbols(body.symbols);
+      })
+      .catch((err: Error) => {
+        setSymbols([]);
+        setSymbolsError(`Could not load symbols: ${err.message}`);
+      });
+  }, []);
 
   async function load() {
     if (!symbol) return;
@@ -61,11 +76,16 @@ export default function StockViewer({ symbols }: { symbols: string[] }) {
       >
         <label>
           Symbol
-          <select value={symbol} onChange={(e) => setSymbol(e.target.value)} required>
+          <select
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value)}
+            disabled={!symbols?.length}
+            required
+          >
             <option value="" disabled>
-              Select…
+              {symbols === null ? "Loading symbols…" : symbols.length ? "Select…" : "No symbols"}
             </option>
-            {symbols.map((s) => (
+            {symbols?.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -85,6 +105,10 @@ export default function StockViewer({ symbols }: { symbols: string[] }) {
         </button>
       </form>
 
+      {symbols === null && (
+        <p className="note">Loading symbols — the first request can take up to a minute while the database wakes up.</p>
+      )}
+      {symbolsError && <p className="error">{symbolsError}</p>}
       {loading && <p className="note">Fetching data — the first request can take up to a minute while the database wakes up.</p>}
       {error && <p className="error">{error}</p>}
 
