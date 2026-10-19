@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Row = Record<string, string | number | null>;
 type StockResponse = { symbol: string; count: number; history: Row[]; error?: string };
@@ -17,8 +17,6 @@ function formatCell(value: Row[string]) {
 }
 
 export default function StockViewer() {
-  const [symbols, setSymbols] = useState<string[] | null>(null);
-  const [symbolsError, setSymbolsError] = useState("");
   const [symbol, setSymbol] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -26,31 +24,19 @@ export default function StockViewer() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/symbols")
-      .then(async (res) => {
-        const body: { symbols?: string[]; error?: string } = await res.json();
-        if (!res.ok || !body.symbols) throw new Error(body.error || `Request failed (${res.status}).`);
-        setSymbols(body.symbols);
-      })
-      .catch((err: Error) => {
-        setSymbols([]);
-        setSymbolsError(`Could not load symbols: ${err.message}`);
-      });
-  }, []);
-
   async function load() {
-    if (!symbol) return;
+    const ticker = symbol.trim().toUpperCase();
+    if (!ticker) return;
     setLoading(true);
     setError("");
     setData(null);
-    const params = new URLSearchParams({ symbol });
+    const params = new URLSearchParams({ symbol: ticker });
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     try {
       const res = await fetch(`/api/stock?${params}`);
       const body: StockResponse = await res.json();
-      if (res.status === 404) setError(`No price history found for ${symbol}.`);
+      if (res.status === 404) setError(`No price history found for ${ticker}.`);
       else if (!res.ok) setError(body.error || `Request failed (${res.status}).`);
       else setData(body);
     } catch {
@@ -76,21 +62,17 @@ export default function StockViewer() {
       >
         <label>
           Symbol
-          <select
+          <input
+            type="text"
             value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            disabled={!symbols?.length}
+            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+            placeholder="e.g. SOXL"
+            maxLength={20}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
             required
-          >
-            <option value="" disabled>
-              {symbols === null ? "Loading symbols…" : symbols.length ? "Select…" : "No symbols"}
-            </option>
-            {symbols?.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label>
           From
@@ -100,15 +82,11 @@ export default function StockViewer() {
           To
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
-        <button type="submit" disabled={!symbol || loading}>
+        <button type="submit" disabled={!symbol.trim() || loading}>
           {loading ? "Loading…" : "Get prices"}
         </button>
       </form>
 
-      {symbols === null && (
-        <p className="note">Loading symbols — the first request can take up to a minute while the database wakes up.</p>
-      )}
-      {symbolsError && <p className="error">{symbolsError}</p>}
       {loading && <p className="note">Fetching data — the first request can take up to a minute while the database wakes up.</p>}
       {error && <p className="error">{error}</p>}
 
